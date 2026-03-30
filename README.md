@@ -6,7 +6,9 @@ Control your mic, camera, screen share, recording, hand raise, availability, and
 
 ## Requirements
 
-- GatherV2 desktop app installed at `/Applications/GatherV2.app`
+- GatherV2 desktop app installed
+  - macOS: `/Applications/GatherV2.app`
+  - Windows: `%LOCALAPPDATA%\Programs\GatherV2\GatherV2.exe`
 - Node.js
 - `ws` npm package (`npm install` in this folder)
 - GatherV2 running with CDP exposed on port 9222 (see [Setup](#setup))
@@ -17,25 +19,42 @@ The app must be launched with `--remote-debugging-port=9222`. There are two ways
 
 ### Option 1. Launch GatherV2 with CDP enabled (no modification needed)
 
-Quit any running instance of GatherV2, then launch it with:
+Quit any running instance of GatherV2, then launch it with the flag:
 
+**macOS**
 ```bash
 open -a GatherV2 --args --remote-debugging-port=9222
+```
+
+**Windows** — Command Prompt:
+```cmd
+"%LOCALAPPDATA%\Programs\GatherV2\GatherV2.exe" --remote-debugging-port=9222
+```
+
+**Windows** — PowerShell:
+```powershell
+Start-Process "$env:LOCALAPPDATA\Programs\GatherV2\GatherV2.exe" -ArgumentList "--remote-debugging-port=9222"
 ```
 
 This is a one-time command per session — you must use it each time you start GatherV2.
 
 ### Option 2. Patch GatherV2 (once, then after each update)
 
-The included script wraps the binary so `--remote-debugging-port=9222` is passed automatically on every launch — from Spotlight, Dock, or StreamDeck.
+The included scripts inject `--remote-debugging-port=9222` so the flag is passed automatically on every launch — from Spotlight/Start Menu, Dock/Taskbar, or StreamDeck.
 
+**macOS** — wraps the binary inside the app bundle (requires `sudo`):
 ```bash
 sudo ./patch-gather.sh
 ```
-
 If macOS shows a security warning on first launch after patching, go to **System Settings → Privacy & Security → Open Anyway**.
 
-Re-run `sudo ./patch-gather.sh` after each Gather update.
+**Windows** — patches Start Menu and Desktop shortcuts (run in PowerShell):
+```powershell
+.\patch-gather.ps1
+```
+If Windows SmartScreen warns on first run, click **More info → Run anyway**.
+
+Re-run the patch script after each Gather update.
 
 ### Install dependencies
 
@@ -89,7 +108,8 @@ GatherV2 app must be running. All commands connect to CDP, execute, and disconne
 | File | Description |
 |---|---|
 | `gather-ctl.js` | Main CLI script |
-| `patch-gather.sh` | Patches GatherV2.app to expose CDP on port 9222 |
+| `patch-gather.sh` | macOS: patches GatherV2.app binary to expose CDP on port 9222 |
+| `patch-gather.ps1` | Windows: patches GatherV2 shortcuts to expose CDP on port 9222 |
 | `package.json` | Node.js project file |
 
 ## Network calls
