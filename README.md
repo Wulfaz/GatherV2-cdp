@@ -9,13 +9,25 @@ Control your mic, camera, screen share, recording, hand raise, availability, and
 - GatherV2 desktop app installed at `/Applications/GatherV2.app`
 - Node.js
 - `ws` npm package (`npm install` in this folder)
-- Gather V2 patched to expose CDP (see [Setup](#setup))
+- GatherV2 running with CDP exposed on port 9222 (see [Setup](#setup))
 
 ## Setup
 
-### 1. Patch GatherV2 (once, then after each update)
+The app must be launched with `--remote-debugging-port=9222`. There are two ways to do this:
 
-The app must be launched with `--remote-debugging-port=9222`. The included script wraps the binary so this happens automatically on every launch — from Spotlight, Dock, or StreamDeck.
+### Option 1. Launch GatherV2 with CDP enabled (no modification needed)
+
+Quit any running instance of GatherV2, then launch it with:
+
+```bash
+open -a GatherV2 --args --remote-debugging-port=9222
+```
+
+This is a one-time command per session — you must use it each time you start GatherV2.
+
+### Option 2. Patch GatherV2 (once, then after each update)
+
+The included script wraps the binary so `--remote-debugging-port=9222` is passed automatically on every launch — from Spotlight, Dock, or StreamDeck.
 
 ```bash
 sudo ./patch-gather.sh
@@ -25,7 +37,7 @@ If macOS shows a security warning on first launch after patching, go to **System
 
 Re-run `sudo ./patch-gather.sh` after each Gather update.
 
-### 2. Install dependencies
+### Install dependencies
 
 ```bash
 npm install
