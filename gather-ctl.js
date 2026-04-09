@@ -17,6 +17,7 @@
  *   node gather-ctl.js record               # Toggle recording (must be in meeting with recording enabled)
  *   node gather-ctl.js record on|off        # Set recording explicitly
  *   node gather-ctl.js reaction <name>      # Send a reaction: wave|heart|tada|thumbsup|rofl|clap|100|fire
+ *   node gather-ctl.js dance <seconds>       # Dance for the given number of seconds
  *
  * Requirements: Gather V2 must be running. CDP exposed on localhost:9222.
  */
@@ -361,6 +362,20 @@ const JS = {
     return true;
   })()`;
   },
+
+  startDance: `(async function() {
+  const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+  if (!u) throw new Error('currentSpaceUser not found');
+  await u.startDancing();
+  return true;
+})()`,
+
+  stopDance: `(async function() {
+  const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+  if (!u) throw new Error('currentSpaceUser not found');
+  await u.stopDancing();
+  return false;
+})()`,
 };
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
@@ -485,8 +500,23 @@ async function main() {
     return;
   }
 
+  if (cmd === 'dance') {
+    const seconds = parseFloat(arg);
+    if (!arg || isNaN(seconds) || seconds < 0.5 || seconds > 10) {
+      console.error('Usage: dance <seconds>  (between 0.5 and 10)');
+      process.exit(1);
+    }
+    await withGather(async (ev) => {
+      await ev(JS.startDance);
+      await new Promise(r => setTimeout(r, seconds * 1000));
+      await ev(JS.stopDance);
+      console.log(`dance: done (${seconds}s)`);
+    });
+    return;
+  }
+
   console.error(`Unknown command: ${cmd}`);
-  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit | reaction <wave|heart|tada|thumbsup|rofl|clap|100|fire>');
+  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit | reaction <wave|heart|tada|thumbsup|rofl|clap|100|fire> | dance <seconds>');
   process.exit(1);
 }
 
