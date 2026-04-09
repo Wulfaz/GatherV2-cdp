@@ -17,7 +17,7 @@
  *   node gather-ctl.js record               # Toggle recording (must be in meeting with recording enabled)
  *   node gather-ctl.js record on|off        # Set recording explicitly
  *   node gather-ctl.js reaction <name>      # Send a reaction: wave|heart|tada|thumbsup|rofl|clap|100|fire
- *   node gather-ctl.js dance <seconds>       # Dance for the given number of seconds
+ *   node gather-ctl.js dance <seconds>      # Dance for the given number of seconds
  *
  * Requirements: Gather V2 must be running. CDP exposed on localhost:9222.
  */
@@ -490,7 +490,7 @@ async function main() {
   if (cmd === 'reaction') {
     const validReactions = ['wave', 'heart', 'tada', 'thumbsup', 'rofl', 'clap', '100', 'fire'];
     if (!arg || !validReactions.includes(arg)) {
-      console.error('Usage: reaction <wave|heart|tada|thumbsup|rofl|clap|100|fire>');
+      console.error('Usage: reaction [wave|heart|tada|thumbsup|rofl|clap|100|fire]');
       process.exit(1);
     }
     await withGather(async (ev) => {
@@ -516,7 +516,7 @@ async function main() {
   }
 
   console.error(`Unknown command: ${cmd}`);
-  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit | reaction <wave|heart|tada|thumbsup|rofl|clap|100|fire> | dance <seconds>');
+  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit | reaction [wave|heart|tada|thumbsup|rofl|clap|100|fire] | dance <seconds>');
   process.exit(1);
 }
 

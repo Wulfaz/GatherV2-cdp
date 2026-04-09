@@ -27,8 +27,9 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 **Gather internals accessed via CDP:**
 
 - `window.gatherDev.Repos.localMediaSelfInfo` — mic state (`_audioMuteClicked`, `toggleAudioMuteClicked()`)
-- `window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined` — user object: hand, availability, desk, meeting membership
+- `window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined` — user object: hand, availability, desk, meeting membership, dancing (`startDancing()`, `stopDancing()`)
 - `window.gatherDev.Repos.avConnections.inputState` — screen share state (`ownScreenShareEnabled`)
+- `window.gatherDev.Repos.reactionsFrontend` — emoji reactions (`sendEmote(emoji)` — takes the raw emoji character, e.g. `👋`)
 - `window.gatherDev.MoveController.moveSpaceUserToDesk()` — move to own desk
 - DOM buttons (`[data-testid="toggle-camera-*"]`, `[data-testid="toggle-screen-share-button"]`) — camera and screen share toggles
 - Meeting toolbar more-options menu (`button[aria-haspopup="menu"]`) — recording start/stop
@@ -46,3 +47,5 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 - CDP timeout is hard-coded at 15 seconds per `ev()` call.
 - JS snippets that interact with dialogs or async UI use polling loops (`for i < 10; sleep 150ms`) — they are intentionally fragile to Gather UI changes.
 - `record`, `share on`, and `hand` require being within meeting range (`u.currentMeeting` must be set). `record` and `share` additionally require the toolbar button to be present in the DOM.
+- `reaction` accepts 8 fixed emojis (wave, heart, tada, thumbsup, rofl, clap, 100, fire) mapped to their Unicode characters. Only these 8 are accepted server-side; arbitrary emojis are silently dropped by GatherV2.
+- `dance` keeps the WebSocket open for the full duration (timer runs in Node.js between two `ev()` calls). Duration is capped at 0.5–10 seconds.
