@@ -16,6 +16,7 @@
  *   node gather-ctl.js share on|off         # Set screen share explicitly
  *   node gather-ctl.js record               # Toggle recording (must be in meeting with recording enabled)
  *   node gather-ctl.js record on|off        # Set recording explicitly
+ *   node gather-ctl.js reaction <name>      # Send a reaction: wave|heart|tada|thumbsup|rofl|clap|100|fire
  *
  * Requirements: Gather V2 must be running. CDP exposed on localhost:9222.
  */
@@ -57,7 +58,7 @@ async function withGather(fn) {
     let timer;
     pending.set(id, {
       resolve: (v) => { clearTimeout(timer); resolve(v); },
-      reject:  (e) => { clearTimeout(timer); reject(e);  }
+      reject: (e) => { clearTimeout(timer); reject(e); }
     });
     ws.send(JSON.stringify({
       id,
@@ -346,14 +347,28 @@ const JS = {
       return true;
     }
   })()`,
+
+  sendReaction: (name) => {
+    const emoji = {
+      wave: '👋', heart: '❤️', tada: '🎉',
+      thumbsup: '👍️', rofl: '🤣', clap: '👏',
+      '100': '💯', fire: '🔥'
+    }[name];
+    return `(async function() {
+    const repo = window.gatherDev?.Repos?.reactionsFrontend;
+    if (!repo) throw new Error('reactionsFrontend not available');
+    await repo.sendEmote('${emoji}');
+    return true;
+  })()`;
+  },
 };
 
 // ─── CLI ─────────────────────────────────────────────────────────────────────
 
 function printState(state) {
   const s = typeof state === 'string' ? JSON.parse(state) : state;
-  console.log(`mic:    ${s.mic    ? 'ON ' : 'OFF'}`);
-  console.log(`cam:    ${s.cam    ? 'ON ' : 'OFF'}`);
+  console.log(`mic:    ${s.mic ? 'ON ' : 'OFF'}`);
+  console.log(`cam:    ${s.cam ? 'ON ' : 'OFF'}`);
   console.log(`share:  ${s.screenAvail ? (s.screen ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
   console.log(`record: ${s.recordAvail ? (s.record ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
   console.log(`status: ${s.avail}`);
@@ -374,8 +389,8 @@ async function main() {
   if (cmd === 'mic') {
     await withGather(async (ev) => {
       let result;
-      if (!arg)        result = await ev(JS.toggleMic);
-      else if (arg === 'on')  result = await ev(JS.setMic(true));
+      if (!arg) result = await ev(JS.toggleMic);
+      else if (arg === 'on') result = await ev(JS.setMic(true));
       else if (arg === 'off') result = await ev(JS.setMic(false));
       else { console.error('Usage: mic [on|off]'); process.exit(1); }
       console.log(`mic: ${result ? 'ON' : 'OFF'}`);
@@ -386,8 +401,8 @@ async function main() {
   if (cmd === 'cam') {
     await withGather(async (ev) => {
       let result;
-      if (!arg)        result = await ev(JS.toggleCam);
-      else if (arg === 'on')  result = await ev(JS.setCam(true));
+      if (!arg) result = await ev(JS.toggleCam);
+      else if (arg === 'on') result = await ev(JS.setCam(true));
       else if (arg === 'off') result = await ev(JS.setCam(false));
       else { console.error('Usage: cam [on|off]'); process.exit(1); }
       await new Promise(r => setTimeout(r, 300));
@@ -401,8 +416,8 @@ async function main() {
   if (cmd === 'hand') {
     await withGather(async (ev) => {
       let result;
-      if (!arg)          result = await ev(JS.toggleHand);
-      else if (arg === 'up')   result = await ev(JS.setHand(true));
+      if (!arg) result = await ev(JS.toggleHand);
+      else if (arg === 'up') result = await ev(JS.setHand(true));
       else if (arg === 'down') result = await ev(JS.setHand(false));
       else { console.error('Usage: hand [up|down]'); process.exit(1); }
       console.log(`hand: ${result ? 'RAISED' : 'DOWN'}`);
@@ -428,8 +443,8 @@ async function main() {
   if (cmd === 'share') {
     await withGather(async (ev) => {
       let result;
-      if (!arg)               result = await ev(JS.screenToggle);
-      else if (arg === 'on')  result = await ev(JS.screenStart);
+      if (!arg) result = await ev(JS.screenToggle);
+      else if (arg === 'on') result = await ev(JS.screenStart);
       else if (arg === 'off') result = await ev(JS.screenStop);
       else { console.error('Usage: share [on|off]'); process.exit(1); }
       console.log(`share: ${result ? 'ON' : 'OFF'}`);
@@ -448,8 +463,8 @@ async function main() {
   if (cmd === 'record') {
     await withGather(async (ev) => {
       let result;
-      if (!arg)         result = await ev(JS.recordToggle);
-      else if (arg === 'on')  result = await ev(JS.recordStart);
+      if (!arg) result = await ev(JS.recordToggle);
+      else if (arg === 'on') result = await ev(JS.recordStart);
       else if (arg === 'off') result = await ev(JS.recordStop);
       else { console.error('Usage: record [on|off]'); process.exit(1); }
       console.log(`record: ${result ? 'ON' : 'OFF'}`);
@@ -457,8 +472,21 @@ async function main() {
     return;
   }
 
+  if (cmd === 'reaction') {
+    const validReactions = ['wave', 'heart', 'tada', 'thumbsup', 'rofl', 'clap', '100', 'fire'];
+    if (!arg || !validReactions.includes(arg)) {
+      console.error('Usage: reaction <wave|heart|tada|thumbsup|rofl|clap|100|fire>');
+      process.exit(1);
+    }
+    await withGather(async (ev) => {
+      await ev(JS.sendReaction(arg));
+      console.log(`reaction: ${arg}`);
+    });
+    return;
+  }
+
   console.error(`Unknown command: ${cmd}`);
-  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit');
+  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit | reaction <wave|heart|tada|thumbsup|rofl|clap|100|fire>');
   process.exit(1);
 }
 
