@@ -30,6 +30,8 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 - `window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined` — user object: hand, availability, desk, meeting membership, dancing (`startDancing()`, `stopDancing()`)
 - `window.gatherDev.Repos.avConnections.inputState` — screen share state (`ownScreenShareEnabled`)
 - `window.gatherDev.Repos.reactionsFrontend` — emoji reactions (`sendEmote(emoji)` — takes the raw emoji character, e.g. `👋`)
+- `window.gatherDev.Repos.videoViewMode.inputState` — meeting view mode (`videoViewMode: "Grid"|"Carousel"`, written directly as a MobX observable; `"Grid"` = meeting/video-grid view, `"Carousel"` = office/game-map view)
+- `window.gatherDev.Repos.syncedMusicPlaybackFrontend` — shared meeting music (`startPlayback(playlist)`, `stopPlayback()`, guarded by `canStartPlayback`/`canStopPlayback`; `playback.playlist` reflects current track or `undefined` when not playing)
 - `window.gatherDev.MoveController.moveSpaceUserToDesk()` — move to own desk
 - DOM buttons (`[data-testid="toggle-camera-*"]`, `[data-testid="toggle-screen-share-button"]`) — camera and screen share toggles
 - Meeting toolbar more-options menu (`button[aria-haspopup="menu"]`) — recording start/stop
@@ -49,3 +51,5 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 - `record`, `share on`, and `hand` require being within meeting range (`u.currentMeeting` must be set). `record` and `share` additionally require the toolbar button to be present in the DOM.
 - `reaction` accepts 8 fixed emojis (wave, heart, tada, thumbsup, rofl, clap, 100, fire) mapped to their Unicode characters. Only these 8 are accepted server-side; arbitrary emojis are silently dropped by GatherV2.
 - `dance` keeps the WebSocket open for the full duration (timer runs in Node.js between two `ev()` calls). Duration is capped at 0.5–10 seconds.
+- `view` requires being in a meeting (`u.currentMeeting`); there are no accessible DOM buttons — state is set by writing directly to the MobX observable `videoViewMode.inputState.videoViewMode` (`"Grid"` or `"Carousel"`).
+- `music` requires being in a meeting; `MusicPlaybackList` enum values: `SoftAmbience` | `LofiChill` | `SimpleEnergy` (string enum — values equal keys). `startPlayback` and `stopPlayback` are synchronous (fire-and-forget); a 300–500 ms settle delay is added after each call.

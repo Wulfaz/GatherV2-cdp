@@ -16,6 +16,10 @@
  *   node gather-ctl.js share on|off         # Set screen share explicitly
  *   node gather-ctl.js record               # Toggle recording (must be in meeting with recording enabled)
  *   node gather-ctl.js record on|off        # Set recording explicitly
+ *   node gather-ctl.js view                  # Toggle meeting/office view (must be in meeting)
+ *   node gather-ctl.js view meeting|office  # Set view explicitly
+ *   node gather-ctl.js music ambient|lofi|energy  # Play ambient music for all in meeting
+ *   node gather-ctl.js music stop           # Stop music
  *   node gather-ctl.js reaction <name>      # Send a reaction: wave|heart|tada|thumbsup|rofl|clap|100|fire
  *   node gather-ctl.js dance <seconds>      # Dance for the given number of seconds
  *
@@ -118,7 +122,13 @@ const JS = {
       hand:      u?.isHandRaised ?? false,
       handAvail:  !!meeting,
       record:     !!meeting?.activeRecordingId,
-      recordAvail: !!meeting
+      recordAvail: !!meeting,
+      // "Grid" = meeting view, "Carousel" = office view
+      view:      !!meeting ? (window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === 'Grid' ? 'meeting' : 'office') : null,
+      viewAvail: !!meeting,
+      // playback is undefined when nothing is playing; playlist value === MusicPlaybackList key
+      music:     !!meeting ? ({'SoftAmbience':'ambient','LofiChill':'lofi','SimpleEnergy':'energy'}[window.gatherDev.Repos.syncedMusicPlaybackFrontend?.playback?.playlist] ?? null) : null,
+      musicAvail: !!meeting
     });
   })()`,
 
@@ -363,6 +373,61 @@ const JS = {
   })()`;
   },
 
+  // ── view: toggle between meeting view and office view (meeting-only) ─────────
+  // Gather internal modes: "Grid" = meeting view, "Carousel" = office view.
+  // State lives at window.gatherDev.Repos.videoViewMode.inputState.videoViewMode.
+  // No DOM buttons — set the MobX observable directly.
+  viewToggle: `(function() {
+    const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+    if (!u?.currentMeeting) throw new Error('Not in a meeting');
+    const repo = window.gatherDev.Repos.videoViewMode;
+    if (!repo?.inputState) throw new Error('videoViewMode repo not found');
+    const current = repo.inputState.videoViewMode;
+    const next = current === 'Grid' ? 'Carousel' : 'Grid';
+    repo.inputState.videoViewMode = next;
+    return next === 'Grid' ? 'meeting' : 'office';
+  })()`,
+
+  viewSet: (mode) => `(function() {
+    const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+    if (!u?.currentMeeting) throw new Error('Not in a meeting');
+    const repo = window.gatherDev.Repos.videoViewMode;
+    if (!repo?.inputState) throw new Error('videoViewMode repo not found');
+    const gatherMode = ${JSON.stringify(mode)} === 'meeting' ? 'Grid' : 'Carousel';
+    repo.inputState.videoViewMode = gatherMode;
+    return ${JSON.stringify(mode)};
+  })()`,
+
+  // ── music: play ambient music for all in meeting, or stop ─────────────────
+  // API: window.gatherDev.Repos.syncedMusicPlaybackFrontend
+  // MusicPlaybackList enum values: SoftAmbience|LofiChill|SimpleEnergy (value === key)
+  // startPlayback/stopPlayback are synchronous (fire-and-forget internally).
+  playMusic: (track) => {
+    const trackMap = { ambient: 'SoftAmbience', lofi: 'LofiChill', energy: 'SimpleEnergy' };
+    const trackValue = trackMap[track];
+    return `(async function() {
+      const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+      if (!u?.currentMeeting) throw new Error('Not in a meeting');
+      const repo = window.gatherDev.Repos.syncedMusicPlaybackFrontend;
+      if (!repo) throw new Error('syncedMusicPlaybackFrontend not available');
+      if (!repo.canStartPlayback) throw new Error('Cannot start music (check space/meeting permissions)');
+      repo.startPlayback('${trackValue}');
+      await new Promise(r => setTimeout(r, 500));
+      return '${track}';
+    })()`;
+  },
+
+  stopMusic: `(async function() {
+    const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+    if (!u?.currentMeeting) throw new Error('Not in a meeting');
+    const repo = window.gatherDev.Repos.syncedMusicPlaybackFrontend;
+    if (!repo) throw new Error('syncedMusicPlaybackFrontend not available');
+    if (!repo.canStopPlayback) throw new Error('Cannot stop music (check space/meeting permissions)');
+    repo.stopPlayback();
+    await new Promise(r => setTimeout(r, 300));
+    return null;
+  })()`,
+
   startDance: `(async function() {
   const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
   if (!u) throw new Error('currentSpaceUser not found');
@@ -382,12 +447,14 @@ const JS = {
 
 function printState(state) {
   const s = typeof state === 'string' ? JSON.parse(state) : state;
+  console.log(`status: ${s.avail}`);
   console.log(`mic:    ${s.mic ? 'ON ' : 'OFF'}`);
   console.log(`cam:    ${s.cam ? 'ON ' : 'OFF'}`);
+  console.log(`hand:   ${s.handAvail ? (s.hand ? 'RAISED' : 'DOWN') : 'N/A (not in meeting)'}`);
   console.log(`share:  ${s.screenAvail ? (s.screen ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
   console.log(`record: ${s.recordAvail ? (s.record ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
-  console.log(`status: ${s.avail}`);
-  console.log(`hand:   ${s.handAvail ? (s.hand ? 'RAISED' : 'DOWN') : 'N/A (not in meeting)'}`);
+  console.log(`view:   ${s.viewAvail ? (s.view === 'meeting' ? 'MEETING' : 'OFFICE') : 'N/A (not in meeting)'}`);
+  console.log(`music:  ${s.musicAvail ? (s.music ? s.music.toUpperCase() : 'OFF') : 'N/A (not in meeting)'}`);
 }
 
 async function main() {
@@ -487,6 +554,32 @@ async function main() {
     return;
   }
 
+  if (cmd === 'view') {
+    const validViews = ['meeting', 'office'];
+    if (arg && !validViews.includes(arg)) {
+      console.error('Usage: view [meeting|office]');
+      process.exit(1);
+    }
+    await withGather(async (ev) => {
+      const result = !arg ? await ev(JS.viewToggle) : await ev(JS.viewSet(arg));
+      console.log(`view: ${result.toUpperCase()}`);
+    });
+    return;
+  }
+
+  if (cmd === 'music') {
+    const validTracks = ['ambient', 'lofi', 'energy', 'stop'];
+    if (!arg || !validTracks.includes(arg)) {
+      console.error('Usage: music [ambient|lofi|energy|stop]');
+      process.exit(1);
+    }
+    await withGather(async (ev) => {
+      const result = arg === 'stop' ? await ev(JS.stopMusic) : await ev(JS.playMusic(arg));
+      console.log(`music: ${result ? result.toUpperCase() : 'OFF'}`);
+    });
+    return;
+  }
+
   if (cmd === 'reaction') {
     const validReactions = ['wave', 'heart', 'tada', 'thumbsup', 'rofl', 'clap', '100', 'fire'];
     if (!arg || !validReactions.includes(arg)) {
@@ -516,7 +609,7 @@ async function main() {
   }
 
   console.error(`Unknown command: ${cmd}`);
-  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | share [on|off] | record [on|off] | hand [up|down] | quit | reaction [wave|heart|tada|thumbsup|rofl|clap|100|fire] | dance <seconds>');
+  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | hand [up|down] | share [on|off] | record [on|off] | reaction [wave|heart|tada|thumbsup|rofl|clap|100|fire] | view [meeting|office] | music [ambient|lofi|energy|stop] | dance <seconds> | quit');
   process.exit(1);
 }
 
