@@ -2,7 +2,7 @@
 
 Programmatic control of the **GatherV2** desktop app from the command line, via Chrome DevTools Protocol (CDP).
 
-Control your mic, camera, screen share, recording, hand raise, availability, and desk — from a terminal, a StreamDeck, or any automation tool.
+Control your mic, camera, screen share, recording, hand raise, availability, desk, reactions, dance, meeting lock, video view, and shared music — from a terminal, a Stream Deck, or any automation tool.
 
 ## Requirements
 
@@ -74,7 +74,7 @@ GatherV2 app must be running. All commands connect to CDP, execute, and disconne
 
 | Command | Argument | Description |
 |---|---|---|
-| `status` | — | Print current state: mic, cam, share, record, availability, hand |
+| `status` | — | Print current state: mic, cam, share, record, availability, hand, lock, view, music |
 | `status` | `active` | Set availability to Active |
 | `status` | `away` | Set availability to Away |
 | `status` | `busy` | Set availability to Busy |
@@ -90,16 +90,30 @@ GatherV2 app must be running. All commands connect to CDP, execute, and disconne
 | `record` | — | Toggle recording (must be in an active meeting) |
 | `record` | `on` | Start recording (opens confirmation dialog, auto-confirms) |
 | `record` | `off` | Stop recording |
-| `hand` | — | Toggle hand raise |
+| `hand` | — | Toggle hand raise (must be in a meeting) |
 | `hand` | `up` | Raise hand |
 | `hand` | `down` | Lower hand |
+| `reaction` | `wave\|heart\|tada\|thumbsup\|rofl\|clap\|100\|fire` | Send an emoji reaction |
+| `dance` | `[seconds]` | Dance for the given duration (0.5–10 s, default 3 s) |
+| `lock` | — | Toggle meeting lock (must be meeting host) |
+| `lock` | `on` | Lock the meeting |
+| `lock` | `off` | Unlock the meeting |
+| `view` | — | Toggle between meeting (Grid) and office (Carousel) view |
+| `view` | `meeting` | Switch to meeting/Grid view |
+| `view` | `office` | Switch to office/Carousel view |
+| `music` | `ambient\|lofi\|energy` | Play shared meeting music (Soft Ambience / Lofi Chill / Simple Energy) |
+| `music` | `stop` | Stop shared meeting music |
 | `quit` | — | Teleport to your own desk (no-op if already there) |
 
 ## Notes
 
 - **`share`** requires being in meeting range (the button must be visible in the toolbar). The `on` action opens the OS screen picker and auto-clicks Share.
 - **`record`** requires being in an active meeting with recording enabled for the space. The `on` action opens the "Record new" menu item and auto-confirms the dialog.
-- **`hand`** requires being in an active meeting.
+- **`hand`**, **`lock`**, **`view`**, and **`music`** require being in an active meeting. **`lock`** additionally requires being the meeting host — non-hosts do not see the lock button.
+- **`reaction`** accepts exactly 8 emojis (wave, heart, tada, thumbsup, rofl, clap, 100, fire). Arbitrary emojis are silently dropped by GatherV2 server-side.
+- **`dance`** duration is capped at 0.5–10 seconds. The WebSocket stays open for the full duration.
+- **`music`** affects all participants in the meeting. `MusicPlaybackList` values: `SoftAmbience` / `LofiChill` / `SimpleEnergy`.
+- **`view`** writes directly to the MobX observable — no DOM button click needed.
 - **`status <avail>`** maps to Gather's availability states: `active` → Active, `away` → Away, `busy` → Busy.
 - **`quit`** requires a desk assigned to your user in the space.
 
@@ -140,7 +154,7 @@ Each command maps to a self-contained IIFE sent as the `expression` parameter.
 
 | Command | Expression (simplified) |
 |---|---|
-| `status` | `window.gatherDev.Repos.localMediaSelfInfo._audioMuteClicked`, `currentSpaceUser.isHandRaised`, `currentMeeting.activeRecordingId`, etc. — bundled into a single `JSON.stringify({…})` |
+| `status` | `window.gatherDev.Repos.localMediaSelfInfo._audioMuteClicked`, `currentSpaceUser.isHandRaised`, `currentMeeting.activeRecordingId`, lock/view/music state, etc. — bundled into a single `JSON.stringify({…})` |
 | `mic` toggle | `window.gatherDev.Repos.localMediaSelfInfo.toggleAudioMuteClicked()` |
 | `mic on/off` | same repo, calls `toggleAudioMuteClicked()` only if current state differs |
 | `cam` toggle | `document.querySelector('[data-testid="toggle-camera-on-button"]').click()` or `toggle-camera-off-button` depending on current state |
@@ -151,5 +165,13 @@ Each command maps to a self-contained IIFE sent as the `expression` parameter.
 | `hand up` | `currentSpaceUser.raiseHand()` |
 | `hand down` | `currentSpaceUser.lowerHand()` |
 | `hand` toggle | checks `currentSpaceUser.isHandRaised`, then calls `raiseHand()` or `lowerHand()` |
+| `reaction <name>` | `window.gatherDev.Repos.reactionsFrontend.sendEmote('<emoji>')` |
+| `dance` | `currentSpaceUser.startDancing()`, timer in Node.js, then `currentSpaceUser.stopDancing()` |
+| `lock` toggle | `document.querySelector('[data-testid="lock-conversation-button"]').click()` or `unlock-conversation-button` |
+| `lock on/off` | checks which button is present; clicks only if state differs |
+| `view` toggle | `window.gatherDev.Repos.videoViewMode.inputState.videoViewMode = next` (MobX write) |
+| `view meeting/office` | same observable write, maps `meeting` → `'Grid'`, `office` → `'Carousel'` |
+| `music <track>` | `window.gatherDev.Repos.syncedMusicPlaybackFrontend.startPlayback('SoftAmbience'\|'LofiChill'\|'SimpleEnergy')` |
+| `music stop` | `window.gatherDev.Repos.syncedMusicPlaybackFrontend.stopPlayback()` |
 | `status active/away/busy` | `currentSpaceUser.setAvailability({ availability: 'Active' })` (or `Away` / `Busy`) |
 | `quit` | `window.gatherDev.MoveController.moveSpaceUserToDesk()` |

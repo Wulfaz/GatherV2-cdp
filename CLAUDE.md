@@ -44,6 +44,13 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 | Per-session (no modification) | `open -a GatherV2 --args --remote-debugging-port=9222` | `"%LOCALAPPDATA%\Programs\GatherV2\GatherV2.exe" --remote-debugging-port=9222` |
 | Persistent patch | `sudo ./patch-gather.sh` (wraps the binary) | `.\patch-gather.ps1` (patches shortcuts) |
 
+## Companion Stream Deck plugin
+
+A Stream Deck plugin mirrors all CLI commands as hardware buttons with live state feedback:
+`~/Developments/Stream Deck/GatherV2 StreamDeck Plugin/`
+
+The plugin uses the same CDP approach and shares the same JS snippets. When adding a new CLI command, update the plugin too: add the JS snippet to `src/gatherV2/js-snippets.ts`, extend `GatherState` in `src/gatherV2/types.ts`, create a new action in `src/actions/`, add image assets under `com.wulfaz.gatherV2.sdPlugin/imgs/actions/`, register in `manifest.json` and `src/plugin.ts`, then run `npm run build`.
+
 ## Key constraints
 
 - The `ws` package is used directly for the CDP WebSocket connection (no higher-level CDP library).
