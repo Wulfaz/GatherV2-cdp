@@ -34,6 +34,7 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 - `window.gatherDev.Repos.syncedMusicPlaybackFrontend` — shared meeting music (`startPlayback(playlist)`, `stopPlayback()`, guarded by `canStartPlayback`/`canStopPlayback`; `playback.playlist` reflects current track or `undefined` when not playing)
 - `window.gatherDev.MoveController.moveSpaceUserToDesk()` — move to own desk
 - DOM buttons (`[data-testid="toggle-camera-*"]`, `[data-testid="toggle-screen-share-button"]`) — camera and screen share toggles
+- DOM buttons (`[data-testid="lock-conversation-button"]`, `[data-testid="unlock-conversation-button"]`) — meeting lock toggle; `lock-conversation-button` present = unlocked (click to lock), `unlock-conversation-button` present = locked (click to unlock)
 - Meeting toolbar more-options menu (`button[aria-haspopup="menu"]`) — recording start/stop
 
 **Platform setup:**
@@ -48,7 +49,7 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 - The `ws` package is used directly for the CDP WebSocket connection (no higher-level CDP library).
 - CDP timeout is hard-coded at 15 seconds per `ev()` call.
 - JS snippets that interact with dialogs or async UI use polling loops (`for i < 10; sleep 150ms`) — they are intentionally fragile to Gather UI changes.
-- `record`, `share on`, and `hand` require being within meeting range (`u.currentMeeting` must be set). `record` and `share` additionally require the toolbar button to be present in the DOM.
+- `record`, `share on`, `hand`, and `lock` require being within meeting range (`u.currentMeeting` must be set). `record` and `share` additionally require the toolbar button to be present in the DOM. `lock` additionally requires being a meeting host (non-hosts do not see the lock button).
 - `reaction` accepts 8 fixed emojis (wave, heart, tada, thumbsup, rofl, clap, 100, fire) mapped to their Unicode characters. Only these 8 are accepted server-side; arbitrary emojis are silently dropped by GatherV2.
 - `dance` keeps the WebSocket open for the full duration (timer runs in Node.js between two `ev()` calls). Duration is capped at 0.5–10 seconds.
 - `view` requires being in a meeting (`u.currentMeeting`); there are no accessible DOM buttons — state is set by writing directly to the MobX observable `videoViewMode.inputState.videoViewMode` (`"Grid"` or `"Carousel"`).

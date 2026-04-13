@@ -3,25 +3,27 @@
  * gather-ctl — Programmatic control of Gather V2 desktop app via CDP
  *
  * Usage:
- *   node gather-ctl.js status               # Print current state (mic, cam, share, record, availability, hand)
+ *   node gather-ctl.js status               # Print current state (mic, cam, locked, hand, share, record, availability)
+ *   node gather-ctl.js status <avail>       # Set availability: active | away | busy
  *   node gather-ctl.js mic                  # Toggle microphone
  *   node gather-ctl.js mic on|off           # Set mic explicitly
  *   node gather-ctl.js cam                  # Toggle camera
  *   node gather-ctl.js cam on|off           # Set camera explicitly
+ *   node gather-ctl.js lock                 # Toggle meeting lock (must be in meeting, host only)
+ *   node gather-ctl.js lock on|off          # Lock or unlock meeting explicitly
+ *   node gather-ctl.js reaction <name>      # Send a reaction: wave|heart|tada|thumbsup|rofl|clap|100|fire
  *   node gather-ctl.js hand                 # Toggle hand raise
  *   node gather-ctl.js hand up|down         # Set hand explicitly
- *   node gather-ctl.js status <avail>       # Set availability: active | away | busy
- *   node gather-ctl.js quit                 # Go back to own desk (no-op if already there)
  *   node gather-ctl.js share                # Toggle screen share (button must be present)
  *   node gather-ctl.js share on|off         # Set screen share explicitly
  *   node gather-ctl.js record               # Toggle recording (must be in meeting with recording enabled)
  *   node gather-ctl.js record on|off        # Set recording explicitly
- *   node gather-ctl.js view                  # Toggle meeting/office view (must be in meeting)
+ *   node gather-ctl.js view                 # Toggle meeting/office view (must be in meeting)
  *   node gather-ctl.js view meeting|office  # Set view explicitly
  *   node gather-ctl.js music ambient|lofi|energy  # Play ambient music for all in meeting
  *   node gather-ctl.js music stop           # Stop music
- *   node gather-ctl.js reaction <name>      # Send a reaction: wave|heart|tada|thumbsup|rofl|clap|100|fire
  *   node gather-ctl.js dance <seconds>      # Dance for the given number of seconds
+ *   node gather-ctl.js quit                 # Go back to own desk (no-op if already there)
  *
  * Requirements: Gather V2 must be running. CDP exposed on localhost:9222.
  */
@@ -112,6 +114,7 @@ const JS = {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
     const camOnBtn = document.querySelector('[data-testid="toggle-camera-off-button"]');
     const screenBtn = document.querySelector('[data-testid="toggle-screen-share-button"]');
+    const unlockConvBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
     const meeting = u?.currentMeeting;
     return JSON.stringify({
       mic:    !lm._audioMuteClicked,
@@ -121,7 +124,10 @@ const JS = {
       avail:  u?.userSetAvailability?.value ?? 'Unknown',
       hand:      u?.isHandRaised ?? false,
       handAvail:  !!meeting,
-      record:     !!meeting?.activeRecordingId,
+      // unlock-conversation-button present = meeting is locked; lock-conversation-button present = unlocked
+      locked:      !!meeting ? !!unlockConvBtn : null,
+      lockAvail:   !!meeting,
+      record:      !!meeting?.activeRecordingId,
       recordAvail: !!meeting,
       // "Grid" = meeting view, "Carousel" = office view
       view:      !!meeting ? (window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === 'Grid' ? 'meeting' : 'office') : null,
@@ -179,6 +185,33 @@ const JS = {
     if (!u.currentMeeting) throw new Error('Not in a meeting');
     await u.setHandRaised(${up});
     return ${up};
+  })()`,
+
+  // ── lock: lock/unlock the meeting (host-only DOM button) ───────────────────
+  // unlock-conversation-button present → meeting is locked (click to unlock)
+  // lock-conversation-button present   → meeting is unlocked (click to lock)
+  toggleLock: `(function() {
+    const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+    if (!u?.currentMeeting) throw new Error('Not in a meeting');
+    const lockBtn   = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    const btn = lockBtn || unlockBtn;
+    if (!btn) throw new Error('Lock button not found (must be host in meeting range)');
+    btn.click();
+    return !!lockBtn; // clicked lockBtn → now locked → true; clicked unlockBtn → now unlocked → false
+  })()`,
+
+  setLock: (lock) => `(function() {
+    const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
+    if (!u?.currentMeeting) throw new Error('Not in a meeting');
+    const lockBtn   = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    const isLocked  = !!unlockBtn;
+    if (isLocked === ${lock}) return ${lock};
+    const btn = ${lock} ? lockBtn : unlockBtn;
+    if (!btn) throw new Error('Lock button not found (must be host in meeting range)');
+    btn.click();
+    return ${lock};
   })()`,
 
   setAvail: (status) => `(async function() {
@@ -450,6 +483,7 @@ function printState(state) {
   console.log(`status: ${s.avail}`);
   console.log(`mic:    ${s.mic ? 'ON ' : 'OFF'}`);
   console.log(`cam:    ${s.cam ? 'ON ' : 'OFF'}`);
+  console.log(`lock:   ${s.lockAvail ? (s.locked ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
   console.log(`hand:   ${s.handAvail ? (s.hand ? 'RAISED' : 'DOWN') : 'N/A (not in meeting)'}`);
   console.log(`share:  ${s.screenAvail ? (s.screen ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
   console.log(`record: ${s.recordAvail ? (s.record ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
@@ -503,6 +537,18 @@ async function main() {
       else if (arg === 'down') result = await ev(JS.setHand(false));
       else { console.error('Usage: hand [up|down]'); process.exit(1); }
       console.log(`hand: ${result ? 'RAISED' : 'DOWN'}`);
+    });
+    return;
+  }
+
+  if (cmd === 'lock') {
+    await withGather(async (ev) => {
+      let result;
+      if (!arg) result = await ev(JS.toggleLock);
+      else if (arg === 'on') result = await ev(JS.setLock(true));
+      else if (arg === 'off') result = await ev(JS.setLock(false));
+      else { console.error('Usage: lock [on|off]'); process.exit(1); }
+      console.log(`locked: ${result ? 'ON' : 'OFF'}`);
     });
     return;
   }
@@ -609,7 +655,7 @@ async function main() {
   }
 
   console.error(`Unknown command: ${cmd}`);
-  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | hand [up|down] | share [on|off] | record [on|off] | reaction [wave|heart|tada|thumbsup|rofl|clap|100|fire] | view [meeting|office] | music [ambient|lofi|energy|stop] | dance <seconds> | quit');
+  console.error('Commands: status [active|away|busy] | mic [on|off] | cam [on|off] | lock [on|off] | reaction [wave|heart|tada|thumbsup|rofl|clap|100|fire] | hand [up|down] | share [on|off] | record [on|off] | view [meeting|office] | music [ambient|lofi|energy|stop] | dance <seconds> | quit');
   process.exit(1);
 }
 
