@@ -30,7 +30,7 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 - `window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined` — user object: hand, availability, desk, meeting membership, dancing (`startDancing()`, `stopDancing()`)
 - `window.gatherDev.Repos.avConnections.inputState` — screen share state (`ownScreenShareEnabled`)
 - `window.gatherDev.Repos.reactionsFrontend` — emoji reactions (`sendEmote(emoji)` — takes the raw emoji character, e.g. `👋`)
-- `window.gatherDev.Repos.videoViewMode.inputState` — meeting view mode (`videoViewMode: "Grid"|"Carousel"`, written directly as a MobX observable; `"Grid"` = meeting/video-grid view, `"Carousel"` = office/game-map view)
+- `window.gatherDev.Repos.videoViewMode.inputState` — meeting view mode (`videoViewMode: "Grid"|"Carousel"` read-only; `"Grid"` = meeting/video-grid view, `"Carousel"` = office/game-map view). **Do not write this observable directly** — it interferes with screen share display. Changes are applied by clicking `[data-testid="meeting-view-nav"]` / `[data-testid="office-view-nav"]` (`<a>` elements, icon-only, no text content).
 - `window.gatherDev.Repos.syncedMusicPlaybackFrontend` — shared meeting music (`startPlayback(playlist)`, `stopPlayback()`, guarded by `canStartPlayback`/`canStopPlayback`; `playback.playlist` reflects current track or `undefined` when not playing)
 - `window.gatherDev.MoveController.moveSpaceUserToDesk()` — move to own desk
 - DOM buttons (`[data-testid="toggle-camera-*"]`, `[data-testid="toggle-screen-share-button"]`) — camera and screen share toggles

@@ -408,26 +408,28 @@ const JS = {
 
   // ── view: toggle between meeting view and office view (meeting-only) ─────────
   // Gather internal modes: "Grid" = meeting view, "Carousel" = office view.
-  // State lives at window.gatherDev.Repos.videoViewMode.inputState.videoViewMode.
-  // No DOM buttons — set the MobX observable directly.
-  viewToggle: `(function() {
+  // State is read from window.gatherDev.Repos.videoViewMode.inputState.videoViewMode,
+  // but changes are applied by clicking the "Meeting view" / "Office view" DOM buttons
+  // (writing to the MobX observable directly interferes with screen share display).
+  viewToggle: `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
     if (!u?.currentMeeting) throw new Error('Not in a meeting');
-    const repo = window.gatherDev.Repos.videoViewMode;
-    if (!repo?.inputState) throw new Error('videoViewMode repo not found');
-    const current = repo.inputState.videoViewMode;
-    const next = current === 'Grid' ? 'Carousel' : 'Grid';
-    repo.inputState.videoViewMode = next;
-    return next === 'Grid' ? 'meeting' : 'office';
+    const officeNav  = document.querySelector('[data-testid="office-view-nav"]');
+    const meetingNav = document.querySelector('[data-testid="meeting-view-nav"]');
+    if (!officeNav || !meetingNav) throw new Error('View nav links not found (must be in meeting range)');
+    const isInMeeting = window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === 'Grid';
+    (isInMeeting ? officeNav : meetingNav).click();
+    return isInMeeting ? 'office' : 'meeting';
   })()`,
 
-  viewSet: (mode) => `(function() {
+  viewSet: (mode) => `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
     if (!u?.currentMeeting) throw new Error('Not in a meeting');
-    const repo = window.gatherDev.Repos.videoViewMode;
-    if (!repo?.inputState) throw new Error('videoViewMode repo not found');
-    const gatherMode = ${JSON.stringify(mode)} === 'meeting' ? 'Grid' : 'Carousel';
-    repo.inputState.videoViewMode = gatherMode;
+    const officeNav  = document.querySelector('[data-testid="office-view-nav"]');
+    const meetingNav = document.querySelector('[data-testid="meeting-view-nav"]');
+    if (!officeNav || !meetingNav) throw new Error('View nav links not found (must be in meeting range)');
+    const isAlreadyInMode = window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === (${JSON.stringify(mode)} === 'meeting' ? 'Grid' : 'Carousel');
+    if (!isAlreadyInMode) (${JSON.stringify(mode)} === 'meeting' ? meetingNav : officeNav).click();
     return ${JSON.stringify(mode)};
   })()`,
 
