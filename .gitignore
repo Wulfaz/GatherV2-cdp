@@ -17,3 +17,9 @@ Icon?
 .fseventsd
 .VolumeIcon.icns
 .com.apple.timemachine.donotpresent
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
