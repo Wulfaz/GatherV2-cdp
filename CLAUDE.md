@@ -57,7 +57,7 @@ The `status` command prints a `meet:` line (`HALLWAY` or `ROOM`) when in any con
 A Stream Deck plugin mirrors all CLI commands as hardware buttons with live state feedback:
 `~/Developments/Stream Deck/GatherV2 StreamDeck Plugin/`
 
-The plugin uses the same CDP approach and shares the same JS snippets. When adding a new CLI command, update the plugin too: add the JS snippet to `src/gatherV2/js-snippets.ts`, extend `GatherState` in `src/gatherV2/types.ts`, create a new action in `src/actions/`, add image assets under `com.wulfaz.gatherV2.sdPlugin/imgs/actions/`, register in `manifest.json` and `src/plugin.ts`, then run `npm run build`.
+The plugin uses the same CDP approach and shares the same JS snippets. When adding a new CLI command, update the plugin too: add the JS snippet to `src/gatherV2/js-snippets.ts`, extend `GatherState` in `src/gatherV2/types.ts`, create a new action in `src/actions/`, add image assets under `net.wulfaz.gatherV2.sdPlugin/imgs/actions/`, register in `manifest.json` and `src/plugin.ts`, then run `npm run build`.
 
 ## Key constraints
 
