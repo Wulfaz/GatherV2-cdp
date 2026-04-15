@@ -112,26 +112,31 @@ const JS = {
   getState: `(function() {
     const lm = window.gatherDev.Repos.localMediaSelfInfo;
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
-    const camOnBtn = document.querySelector('[data-testid="toggle-camera-off-button"]');
+    const camOnBtn  = document.querySelector('[data-testid="toggle-camera-off-button"]');
     const screenBtn = document.querySelector('[data-testid="toggle-screen-share-button"]');
-    const unlockConvBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    const lockBtn   = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
     const meeting = u?.currentMeeting;
+    // Hallway Conversations (proximity-triggered) don't set currentMeeting but show lock/unlock buttons
+    const hallwayConversation = !meeting && (!!lockBtn || !!unlockBtn);
+    const inAnyMeeting = !!meeting || hallwayConversation;
     return JSON.stringify({
       mic:    !lm._audioMuteClicked,
       cam:    !!camOnBtn,
       screen: window.gatherDev.Repos.avConnections.inputState?.ownScreenShareEnabled ?? false,
       screenAvail: !!screenBtn,
       avail:  u?.userSetAvailability?.value ?? 'Unknown',
+      hallwayConversation: hallwayConversation,
       hand:      u?.isHandRaised ?? false,
-      handAvail:  !!meeting,
+      handAvail:  inAnyMeeting,
       // unlock-conversation-button present = meeting is locked; lock-conversation-button present = unlocked
-      locked:      !!meeting ? !!unlockConvBtn : null,
-      lockAvail:   !!meeting,
+      locked:      inAnyMeeting ? !!unlockBtn : null,
+      lockAvail:   inAnyMeeting,
       record:      !!meeting?.activeRecordingId,
       recordAvail: !!meeting,
       // "Grid" = meeting view, "Carousel" = office view
-      view:      !!meeting ? (window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === 'Grid' ? 'meeting' : 'office') : null,
-      viewAvail: !!meeting,
+      view:      inAnyMeeting ? (window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === 'Grid' ? 'meeting' : 'office') : null,
+      viewAvail: inAnyMeeting,
       // playback is undefined when nothing is playing; playlist value === MusicPlaybackList key
       music:     !!meeting ? ({'SoftAmbience':'ambient','LofiChill':'lofi','SimpleEnergy':'energy'}[window.gatherDev.Repos.syncedMusicPlaybackFrontend?.playback?.playlist] ?? null) : null,
       musicAvail: !!meeting
@@ -174,7 +179,9 @@ const JS = {
   toggleHand: `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
     if (!u) throw new Error('currentSpaceUser not found');
-    if (!u.currentMeeting) throw new Error('Not in a meeting');
+    const lockBtn = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    if (!u.currentMeeting && !lockBtn && !unlockBtn) throw new Error('Not in a meeting');
     if (u.isHandRaised) { await u.lowerHand(); return false; }
     else                { await u.raiseHand(); return true;  }
   })()`,
@@ -182,7 +189,9 @@ const JS = {
   setHand: (up) => `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
     if (!u) throw new Error('currentSpaceUser not found');
-    if (!u.currentMeeting) throw new Error('Not in a meeting');
+    const lockBtn = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    if (!u.currentMeeting && !lockBtn && !unlockBtn) throw new Error('Not in a meeting');
     await u.setHandRaised(${up});
     return ${up};
   })()`,
@@ -192,9 +201,9 @@ const JS = {
   // lock-conversation-button present   → meeting is unlocked (click to lock)
   toggleLock: `(function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
-    if (!u?.currentMeeting) throw new Error('Not in a meeting');
     const lockBtn   = document.querySelector('[data-testid="lock-conversation-button"]');
     const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    if (!u?.currentMeeting && !lockBtn && !unlockBtn) throw new Error('Not in a meeting');
     const btn = lockBtn || unlockBtn;
     if (!btn) throw new Error('Lock button not found (must be host in meeting range)');
     btn.click();
@@ -203,9 +212,9 @@ const JS = {
 
   setLock: (lock) => `(function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
-    if (!u?.currentMeeting) throw new Error('Not in a meeting');
     const lockBtn   = document.querySelector('[data-testid="lock-conversation-button"]');
     const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    if (!u?.currentMeeting && !lockBtn && !unlockBtn) throw new Error('Not in a meeting');
     const isLocked  = !!unlockBtn;
     if (isLocked === ${lock}) return ${lock};
     const btn = ${lock} ? lockBtn : unlockBtn;
@@ -406,30 +415,44 @@ const JS = {
   })()`;
   },
 
-  // ── view: toggle between meeting view and office view (meeting-only) ─────────
+  // ── view: toggle between meeting view and office view ────────────────────────
   // Gather internal modes: "Grid" = meeting view, "Carousel" = office view.
-  // State is read from window.gatherDev.Repos.videoViewMode.inputState.videoViewMode,
-  // but changes are applied by clicking the "Meeting view" / "Office view" DOM buttons
-  // (writing to the MobX observable directly interferes with screen share display).
+  // State is read from videoViewMode.inputState.videoViewMode.
+  //
+  // Switching TO Grid: clicking meeting-view-nav triggers React Router navigation which
+  // unmounts Carousel-view components (including the "Locked conversation" label overlay).
+  // setViewMode('Grid') alone dispatches the same Redux action but does NOT change the route,
+  // so the label persists. Therefore: click meeting-view-nav when present (room meetings);
+  // fall back to setViewMode('Grid') only in Hallway Conversations where the nav is absent.
+  //
+  // Switching TO Carousel: setViewMode('Carousel') is sufficient — no label issue in Grid.
+  // Do NOT click office-view-nav — it navigates to the map page, exiting Hallway Conversations.
   viewToggle: `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
-    if (!u?.currentMeeting) throw new Error('Not in a meeting');
-    const officeNav  = document.querySelector('[data-testid="office-view-nav"]');
-    const meetingNav = document.querySelector('[data-testid="meeting-view-nav"]');
-    if (!officeNav || !meetingNav) throw new Error('View nav links not found (must be in meeting range)');
-    const isInMeeting = window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === 'Grid';
-    (isInMeeting ? officeNav : meetingNav).click();
-    return isInMeeting ? 'office' : 'meeting';
+    const lockBtn = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    if (!u?.currentMeeting && !lockBtn && !unlockBtn) throw new Error('Not in a meeting');
+    const repo = window.gatherDev.Repos.videoViewMode;
+    if (!repo) throw new Error('videoViewMode not available');
+    const isInMeeting = repo.inputState?.videoViewMode === 'Grid';
+    repo.setViewMode(isInMeeting ? 'Carousel' : 'Grid');
+    await new Promise(r => setTimeout(r, 300));
+    return repo.inputState?.videoViewMode === 'Grid' ? 'meeting' : 'office';
   })()`,
 
   viewSet: (mode) => `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
-    if (!u?.currentMeeting) throw new Error('Not in a meeting');
-    const officeNav  = document.querySelector('[data-testid="office-view-nav"]');
-    const meetingNav = document.querySelector('[data-testid="meeting-view-nav"]');
-    if (!officeNav || !meetingNav) throw new Error('View nav links not found (must be in meeting range)');
-    const isAlreadyInMode = window.gatherDev.Repos.videoViewMode?.inputState?.videoViewMode === (${JSON.stringify(mode)} === 'meeting' ? 'Grid' : 'Carousel');
-    if (!isAlreadyInMode) (${JSON.stringify(mode)} === 'meeting' ? meetingNav : officeNav).click();
+    const lockBtn = document.querySelector('[data-testid="lock-conversation-button"]');
+    const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    if (!u?.currentMeeting && !lockBtn && !unlockBtn) throw new Error('Not in a meeting');
+    const repo = window.gatherDev.Repos.videoViewMode;
+    if (!repo) throw new Error('videoViewMode not available');
+    const wantGrid = ${JSON.stringify(mode)} === 'meeting';
+    const isAlreadyInMode = repo.inputState?.videoViewMode === (wantGrid ? 'Grid' : 'Carousel');
+    if (!isAlreadyInMode) {
+      repo.setViewMode(wantGrid ? 'Grid' : 'Carousel');
+      await new Promise(r => setTimeout(r, 300));
+    }
     return ${JSON.stringify(mode)};
   })()`,
 
@@ -463,6 +486,93 @@ const JS = {
     return null;
   })()`,
 
+  // ── discover-view: snapshot of all repos + videoViewMode API + locked label fiber
+  // Temporary discovery tool — run before and after a manual "Meeting view" click, then diff.
+  discoverView: `(function() {
+    // A: all repo keys
+    const allRepoKeys = Object.keys(window.gatherDev.Repos).sort();
+
+    // B: videoViewMode full API
+    const vmRepo = window.gatherDev.Repos.videoViewMode;
+    const vmMethods = [];
+    let p = Object.getPrototypeOf(vmRepo);
+    while (p && p !== Object.prototype) {
+      Object.getOwnPropertyNames(p).forEach(n => {
+        if (n !== 'constructor' && typeof vmRepo[n] === 'function' && !vmMethods.includes(n)) vmMethods.push(n);
+      });
+      p = Object.getPrototypeOf(p);
+    }
+    const vmOwnNonFn = Object.keys(vmRepo).filter(k => typeof vmRepo[k] !== 'function');
+
+    // C: all inputStates snapshot
+    const repos = window.gatherDev.Repos;
+    const inputStates = {};
+    for (const key of Object.keys(repos)) {
+      try {
+        const r = repos[key];
+        if (r && typeof r === 'object' && r.inputState !== undefined) {
+          inputStates[key] = JSON.parse(JSON.stringify(r.inputState));
+        }
+      } catch(e) { inputStates[key] = 'err: ' + e.message; }
+    }
+
+    // D: "Locked conversation" React fiber path
+    let lockedLabel = null;
+    try {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      const nodes = [];
+      let n;
+      while ((n = walker.nextNode())) {
+        if (n.textContent.trim() === 'Locked conversation') nodes.push(n.parentElement);
+      }
+      if (nodes.length) {
+        const el = nodes[0];
+        const fiberKey = Object.keys(el).find(k => k.startsWith('__reactFiber'));
+        if (fiberKey) {
+          let f = el[fiberKey];
+          const path = [];
+          for (let i = 0; i < 25 && f; i++) {
+            const name = typeof f.type === 'function' ? (f.type.displayName || f.type.name) : null;
+            if (name) path.push(name);
+            f = f.return;
+          }
+          lockedLabel = { tagName: el.tagName, class: el.className, reactPath: path };
+        } else {
+          lockedLabel = { tagName: el.tagName, class: el.className, noFiber: true };
+        }
+      }
+    } catch(e) { lockedLabel = 'err: ' + e.message; }
+
+    // E: meeting-view-nav onClick
+    let navInfo = null;
+    try {
+      const nav = document.querySelector('[data-testid="meeting-view-nav"]');
+      if (nav) {
+        const fk = Object.keys(nav).find(k => k.startsWith('__reactFiber'));
+        if (fk) {
+          const props = nav[fk]?.pendingProps || {};
+          navInfo = {
+            href: nav.href,
+            onClick: props.onClick?.toString().slice(0, 800) ?? null,
+            propKeys: Object.keys(props),
+          };
+        } else {
+          navInfo = { href: nav.href, noFiber: true };
+        }
+      } else {
+        navInfo = 'meeting-view-nav not in DOM';
+      }
+    } catch(e) { navInfo = 'err: ' + e.message; }
+
+    return JSON.stringify({
+      A_allRepoKeys: allRepoKeys,
+      B_videoViewMode: { methods: vmMethods, ownNonFn: vmOwnNonFn, inputState: vmRepo.inputState },
+      C_inputStates: inputStates,
+      D_lockedLabel: lockedLabel,
+      E_meetingViewNav: navInfo,
+    }, null, 2);
+  })()`,
+
   startDance: `(async function() {
   const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
   if (!u) throw new Error('currentSpaceUser not found');
@@ -483,6 +593,8 @@ const JS = {
 function printState(state) {
   const s = typeof state === 'string' ? JSON.parse(state) : state;
   console.log(`status: ${s.avail}`);
+  if (s.hallwayConversation) console.log(`meet:   HALLWAY`);
+  else if (s.lockAvail)      console.log(`meet:   ROOM`);
   console.log(`mic:    ${s.mic ? 'ON ' : 'OFF'}`);
   console.log(`cam:    ${s.cam ? 'ON ' : 'OFF'}`);
   console.log(`lock:   ${s.lockAvail ? (s.locked ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);
@@ -652,6 +764,26 @@ async function main() {
       await new Promise(r => setTimeout(r, seconds * 1000));
       await ev(JS.stopDance);
       console.log(`dance: done (${seconds}s)`);
+    });
+    return;
+  }
+
+  if (cmd === 'discover-view') {
+    await withGather(async (ev) => {
+      const result = await ev(JS.discoverView);
+      const data = JSON.parse(result);
+      console.log('=== A: All Repo Keys ===');
+      console.log(data.A_allRepoKeys.join(', '));
+      console.log('\n=== B: videoViewMode API ===');
+      console.log('methods:', data.B_videoViewMode.methods.join(', '));
+      console.log('own non-fn:', data.B_videoViewMode.ownNonFn.join(', '));
+      console.log('inputState:', JSON.stringify(data.B_videoViewMode.inputState));
+      console.log('\n=== C: All inputStates (diff before/after manual click) ===');
+      console.log(JSON.stringify(data.C_inputStates, null, 2));
+      console.log('\n=== D: "Locked conversation" label fiber ===');
+      console.log(JSON.stringify(data.D_lockedLabel, null, 2));
+      console.log('\n=== E: meeting-view-nav handler ===');
+      console.log(JSON.stringify(data.E_meetingViewNav, null, 2));
     });
     return;
   }

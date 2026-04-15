@@ -105,15 +105,24 @@ GatherV2 app must be running. All commands connect to CDP, execute, and disconne
 | `music` | `stop` | Stop shared meeting music |
 | `quit` | — | Teleport to your own desk (no-op if already there) |
 
+## Meeting types
+
+GatherV2 has two meeting types:
+
+- **Room meeting** — calendar/planned meetings. Full feature set available (`hand`, `lock`, `view`, `music`, `record`).
+- **Hallway Conversation** — automatically triggered when avatars come close to each other. `hand`, `lock`, and `view` work; `music` and `record` are unavailable.
+
+`status` prints a `meet:` line showing `HALLWAY` or `ROOM` whenever you are in any conversation.
+
 ## Notes
 
 - **`share`** requires being in meeting range (the button must be visible in the toolbar). The `on` action opens the OS screen picker and auto-clicks Share.
-- **`record`** requires being in an active meeting with recording enabled for the space. The `on` action opens the "Record new" menu item and auto-confirms the dialog.
-- **`hand`**, **`lock`**, **`view`**, and **`music`** require being in an active meeting. **`lock`** additionally requires being the meeting host — non-hosts do not see the lock button.
+- **`record`** requires being in a **room** meeting with recording enabled for the space. The `on` action opens the "Record new" menu item and auto-confirms the dialog.
+- **`hand`** and **`view`** work in both room meetings and Hallway Conversations.
+- **`lock`** works in both room meetings and Hallway Conversations. Additionally requires being the meeting host — non-hosts do not see the lock button.
+- **`music`** requires being in a **room** meeting. It affects all participants. `MusicPlaybackList` values: `SoftAmbience` / `LofiChill` / `SimpleEnergy`.
 - **`reaction`** accepts exactly 8 emojis (wave, heart, tada, thumbsup, rofl, clap, 100, fire). Arbitrary emojis are silently dropped by GatherV2 server-side.
 - **`dance`** duration is capped at 0.5–10 seconds. The WebSocket stays open for the full duration.
-- **`music`** affects all participants in the meeting. `MusicPlaybackList` values: `SoftAmbience` / `LofiChill` / `SimpleEnergy`.
-- **`view`** writes directly to the MobX observable — no DOM button click needed.
 - **`status <avail>`** maps to Gather's availability states: `active` → Active, `away` → Away, `busy` → Busy.
 - **`quit`** requires a desk assigned to your user in the space.
 
@@ -169,8 +178,8 @@ Each command maps to a self-contained IIFE sent as the `expression` parameter.
 | `dance` | `currentSpaceUser.startDancing()`, timer in Node.js, then `currentSpaceUser.stopDancing()` |
 | `lock` toggle | `document.querySelector('[data-testid="lock-conversation-button"]').click()` or `unlock-conversation-button` |
 | `lock on/off` | checks which button is present; clicks only if state differs |
-| `view` toggle | `window.gatherDev.Repos.videoViewMode.inputState.videoViewMode = next` (MobX write) |
-| `view meeting/office` | same observable write, maps `meeting` → `'Grid'`, `office` → `'Carousel'` |
+| `view` toggle | reads `videoViewMode.inputState.videoViewMode`, calls `repo.setViewMode('Carousel'` or `'Grid')` |
+| `view meeting/office` | same `setViewMode` call, maps `meeting` → `'Grid'`, `office` → `'Carousel'` |
 | `music <track>` | `window.gatherDev.Repos.syncedMusicPlaybackFrontend.startPlayback('SoftAmbience'\|'LofiChill'\|'SimpleEnergy')` |
 | `music stop` | `window.gatherDev.Repos.syncedMusicPlaybackFrontend.stopPlayback()` |
 | `status active/away/busy` | `currentSpaceUser.setAvailability({ availability: 'Active' })` (or `Away` / `Busy`) |
