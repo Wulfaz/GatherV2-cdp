@@ -116,9 +116,12 @@ const JS = {
     const screenBtn = document.querySelector('[data-testid="toggle-screen-share-button"]');
     const lockBtn   = document.querySelector('[data-testid="lock-conversation-button"]');
     const unlockBtn = document.querySelector('[data-testid="unlock-conversation-button"]');
+    const externalMeetingTitle = [...document.querySelectorAll('span')].find(s => s.textContent?.trim() === 'External meeting detected');
     const meeting = u?.currentMeeting;
+    // External Meetings show a popup with title "External meeting detected" — no Gather AV, no lock/hand controls
+    const externalMeeting = !!externalMeetingTitle;
     // Hallway Conversations (proximity-triggered) don't set currentMeeting but show lock/unlock buttons
-    const hallwayConversation = !meeting && (!!lockBtn || !!unlockBtn);
+    const hallwayConversation = !meeting && !externalMeeting && (!!lockBtn || !!unlockBtn);
     const inAnyMeeting = !!meeting || hallwayConversation;
     return JSON.stringify({
       mic:    !lm._audioMuteClicked,
@@ -126,6 +129,7 @@ const JS = {
       screen: window.gatherDev.Repos.avConnections.inputState?.ownScreenShareEnabled ?? false,
       screenAvail: !!screenBtn,
       avail:  u?.userSetAvailability?.value ?? 'Unknown',
+      externalMeeting: externalMeeting,
       hallwayConversation: hallwayConversation,
       hand:      u?.isHandRaised ?? false,
       handAvail:  inAnyMeeting,
@@ -593,8 +597,9 @@ const JS = {
 function printState(state) {
   const s = typeof state === 'string' ? JSON.parse(state) : state;
   console.log(`status: ${s.avail}`);
-  if (s.hallwayConversation) console.log(`meet:   HALLWAY`);
-  else if (s.lockAvail)      console.log(`meet:   ROOM`);
+  if (s.externalMeeting)          console.log(`meet:   EXTERNAL`);
+  else if (s.hallwayConversation) console.log(`meet:   HALLWAY`);
+  else if (s.lockAvail)           console.log(`meet:   ROOM`);
   console.log(`mic:    ${s.mic ? 'ON ' : 'OFF'}`);
   console.log(`cam:    ${s.cam ? 'ON ' : 'OFF'}`);
   console.log(`lock:   ${s.lockAvail ? (s.locked ? 'ON ' : 'OFF') : 'N/A (not in meeting)'}`);

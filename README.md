@@ -107,12 +107,13 @@ GatherV2 app must be running. All commands connect to CDP, execute, and disconne
 
 ## Meeting types
 
-GatherV2 has two meeting types:
+GatherV2 has three meeting types:
 
 - **Room meeting** — calendar/planned meetings. Full feature set available (`hand`, `lock`, `view`, `music`, `record`).
 - **Hallway Conversation** — automatically triggered when avatars come close to each other. `hand`, `lock`, and `view` work; `music` and `record` are unavailable.
+- **External Meeting** — an external call (Zoom, Google Meet, etc.) launched from within Gather. A popup titled "External meeting detected" appears. No Gather AV controls apply; `status` is read-only.
 
-`status` prints a `meet:` line showing `HALLWAY` or `ROOM` whenever you are in any conversation.
+`status` prints a `meet:` line showing `EXTERNAL`, `HALLWAY`, or `ROOM` whenever you are in any conversation.
 
 ## Notes
 

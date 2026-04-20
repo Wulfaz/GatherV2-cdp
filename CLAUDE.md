@@ -26,11 +26,12 @@ The entire project is a single-file CLI (`gather-ctl.js`) with no framework, no 
 
 **Meeting types:**
 
-GatherV2 has two meeting types detected differently:
+GatherV2 has three meeting types detected differently:
 - **Room meeting** — `u.currentMeeting` is set (non-null). Full feature set available.
 - **Hallway Conversation** — proximity-triggered when avatars get close; `u.currentMeeting` is null. Detected by DOM presence of `lock-conversation-button` or `unlock-conversation-button`. Only `hand`, `lock`, and `view` are available; `music` and `record` require a room meeting.
+- **External Meeting** — an external call (Zoom, Google Meet, etc.) triggered from within Gather; a popup with title **"External meeting detected"** appears (buttons: "Join next meeting", "Go to desk"). `u.currentMeeting` is null, no lock/unlock buttons, no `data-testid` on any popup element. Detected by DOM presence of a `<span>` whose trimmed text equals `"External meeting detected"`. No Gather AV controls apply; only `status` (read-only) is relevant.
 
-The `status` command prints a `meet:` line (`HALLWAY` or `ROOM`) when in any conversation.
+The `status` command prints a `meet:` line (`EXTERNAL`, `HALLWAY`, or `ROOM`) when in any conversation.
 
 **Gather internals accessed via CDP:**
 
@@ -64,7 +65,8 @@ The plugin uses the same CDP approach and shares the same JS snippets. When addi
 - The `ws` package is used directly for the CDP WebSocket connection (no higher-level CDP library).
 - CDP timeout is hard-coded at 15 seconds per `ev()` call.
 - JS snippets that interact with dialogs or async UI use polling loops (`for i < 10; sleep 150ms`) — they are intentionally fragile to Gather UI changes.
-- **"In any conversation" detection** uses DOM presence of `lock-conversation-button` or `unlock-conversation-button`. This covers both room meetings (`u.currentMeeting` set) and Hallway Conversations (`u.currentMeeting` null). `hand`, `lock`, and `view` use this broad check.
+- **"In any conversation" detection** (`inAnyMeeting`) uses DOM presence of `lock-conversation-button` or `unlock-conversation-button`. This covers room meetings (`u.currentMeeting` set) and Hallway Conversations (`u.currentMeeting` null). External Meetings are tracked separately via `externalMeeting` and are excluded from `inAnyMeeting`. `hand`, `lock`, and `view` use the `inAnyMeeting` check.
+- **External Meeting detection** uses `[...document.querySelectorAll('span')].find(s => s.textContent?.trim() === 'External meeting detected')`. The popup has no `data-testid` — Gather uses obfuscated class names only. `hallwayConversation` explicitly guards against `externalMeeting` being true to avoid false positives.
 - `record` and `music` require a room meeting only (`u.currentMeeting` must be set). `record` and `share` additionally require the toolbar button to be present in the DOM. `lock` additionally requires being a meeting host (non-hosts do not see the lock button).
 - `reaction` accepts 8 fixed emojis (wave, heart, tada, thumbsup, rofl, clap, 100, fire) mapped to their Unicode characters. Only these 8 are accepted server-side; arbitrary emojis are silently dropped by GatherV2.
 - `dance` keeps the WebSocket open for the full duration (timer runs in Node.js between two `ev()` calls). Duration is capped at 0.5–10 seconds.
