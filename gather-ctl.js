@@ -423,14 +423,13 @@ const JS = {
   // Gather internal modes: "Grid" = meeting view, "Carousel" = office view.
   // State is read from videoViewMode.inputState.videoViewMode.
   //
-  // Switching TO Grid: clicking meeting-view-nav triggers React Router navigation which
-  // unmounts Carousel-view components (including the "Locked conversation" label overlay).
-  // setViewMode('Grid') alone dispatches the same Redux action but does NOT change the route,
-  // so the label persists. Therefore: click meeting-view-nav when present (room meetings);
-  // fall back to setViewMode('Grid') only in Hallway Conversations where the nav is absent.
+  // Switching TO Grid: click meeting-view-nav in Room Meetings to trigger React Router navigation
+  // (setViewMode alone leaves the route unchanged — "Locked conversation" label persists).
+  // Fall back to setViewMode('Grid') in Hallway Conversations where meeting-view-nav is absent.
   //
-  // Switching TO Carousel: setViewMode('Carousel') is sufficient — no label issue in Grid.
-  // Do NOT click office-view-nav — it navigates to the map page, exiting Hallway Conversations.
+  // Switching TO Carousel: in Room Meetings click office-view-nav to trigger React Router
+  // navigation (setViewMode alone leaves a black background). In Hallway Conversations fall
+  // back to setViewMode('Carousel') — clicking office-view-nav there exits the conversation.
   viewToggle: `(async function() {
     const u = window.gatherDev.Repos.gameSpace.currentSpaceUserOrUndefined;
     const lockBtn = document.querySelector('[data-testid="lock-conversation-button"]');
@@ -439,7 +438,21 @@ const JS = {
     const repo = window.gatherDev.Repos.videoViewMode;
     if (!repo) throw new Error('videoViewMode not available');
     const isInMeeting = repo.inputState?.videoViewMode === 'Grid';
-    repo.setViewMode(isInMeeting ? 'Carousel' : 'Grid');
+    if (isInMeeting) {
+      if (u?.currentMeeting) {
+        const nav = document.querySelector('[data-testid="office-view-nav"]');
+        if (nav) { nav.click(); } else { repo.setViewMode('Carousel'); }
+      } else {
+        repo.setViewMode('Carousel');
+      }
+    } else {
+      if (u?.currentMeeting) {
+        const nav = document.querySelector('[data-testid="meeting-view-nav"]');
+        if (nav) { nav.click(); } else { repo.setViewMode('Grid'); }
+      } else {
+        repo.setViewMode('Grid');
+      }
+    }
     await new Promise(r => setTimeout(r, 300));
     return repo.inputState?.videoViewMode === 'Grid' ? 'meeting' : 'office';
   })()`,
@@ -454,7 +467,19 @@ const JS = {
     const wantGrid = ${JSON.stringify(mode)} === 'meeting';
     const isAlreadyInMode = repo.inputState?.videoViewMode === (wantGrid ? 'Grid' : 'Carousel');
     if (!isAlreadyInMode) {
-      repo.setViewMode(wantGrid ? 'Grid' : 'Carousel');
+      if (wantGrid) {
+        if (u?.currentMeeting) {
+          const nav = document.querySelector('[data-testid="meeting-view-nav"]');
+          if (nav) { nav.click(); } else { repo.setViewMode('Grid'); }
+        } else {
+          repo.setViewMode('Grid');
+        }
+      } else if (u?.currentMeeting) {
+        const nav = document.querySelector('[data-testid="office-view-nav"]');
+        if (nav) { nav.click(); } else { repo.setViewMode('Carousel'); }
+      } else {
+        repo.setViewMode('Carousel');
+      }
       await new Promise(r => setTimeout(r, 300));
     }
     return ${JSON.stringify(mode)};

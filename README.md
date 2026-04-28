@@ -179,8 +179,8 @@ Each command maps to a self-contained IIFE sent as the `expression` parameter.
 | `dance` | `currentSpaceUser.startDancing()`, timer in Node.js, then `currentSpaceUser.stopDancing()` |
 | `lock` toggle | `document.querySelector('[data-testid="lock-conversation-button"]').click()` or `unlock-conversation-button` |
 | `lock on/off` | checks which button is present; clicks only if state differs |
-| `view` toggle | reads `videoViewMode.inputState.videoViewMode`, calls `repo.setViewMode('Carousel'` or `'Grid')` |
-| `view meeting/office` | same `setViewMode` call, maps `meeting` → `'Grid'`, `office` → `'Carousel'` |
+| `view` toggle | reads `videoViewMode.inputState.videoViewMode`; in Room Meetings clicks `meeting-view-nav` or `office-view-nav` to trigger React Router navigation; in Hallway Conversations falls back to `repo.setViewMode('Grid'\|'Carousel')` |
+| `view meeting/office` | same approach; maps `meeting` → Grid (`meeting-view-nav`), `office` → Carousel (`office-view-nav`), with `setViewMode` fallback in Hallway Conversations |
 | `music <track>` | `window.gatherDev.Repos.syncedMusicPlaybackFrontend.startPlayback('SoftAmbience'\|'LofiChill'\|'SimpleEnergy')` |
 | `music stop` | `window.gatherDev.Repos.syncedMusicPlaybackFrontend.stopPlayback()` |
 | `status active/away/busy` | `currentSpaceUser.setAvailability({ availability: 'Active' })` (or `Away` / `Busy`) |
